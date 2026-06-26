@@ -667,11 +667,27 @@ def merge_subtitle_items_gemini(items, api_key, proxy=None):
             
     if res is None or res.status_code != 200:
         if res is not None:
-            res.raise_for_status()
+            # Try to parse Google's JSON error response
+            try:
+                err_json = res.json()
+                if "error" in err_json:
+                    err_msg = err_json["error"].get("message", "")
+                    err_status = err_json["error"].get("status", "")
+                    raise RuntimeError(f"Gemini API Error {res.status_code} ({err_status}): {err_msg}")
+            except Exception as json_err:
+                if isinstance(json_err, RuntimeError):
+                    raise json_err
+            # If not JSON, show the first 300 chars of the text (helps identify proxy blocks/HTML)
+            err_body = res.text.strip() if res.text else ""
+            if not err_body:
+                err_body = "Empty Response"
+            else:
+                err_body = err_body[:300]
+            raise RuntimeError(f"HTTP {res.status_code} from endpoint: {err_body}")
         elif last_err:
             raise last_err
         else:
-            raise RuntimeError("Failed to connect to Gemini API (404 Not Found or Connection Error).")
+            raise RuntimeError("Failed to connect to Gemini API (Connection Error).")
             
     res_data = res.json()
     
