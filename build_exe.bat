@@ -13,10 +13,9 @@ if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 
 echo.
-echo Step 3: Compiling Dubbing Pro to standalone executable...
-:: Using pyinstaller to compile app_gui.py into a single directory distribution
-:: Imports mutagen, python-docx, requests, youtube-transcript-api, and imageio-ffmpeg
-venv\Scripts\pyinstaller --noconsole --name "DubbingPro" --add-data "app;app" --collect-all mutagen --collect-all docx --collect-all requests --collect-all youtube_transcript_api --collect-all imageio_ffmpeg app_gui.py
+echo Step 3: Compiling Dubbing Pro and Backend Server to standalone package...
+:: Using pyinstaller to compile app_gui.py with backend path and all backend server dependencies
+venv\Scripts\pyinstaller --paths=app --noconsole --name "DubbingPro" --collect-all mutagen --collect-all docx --collect-all requests --collect-all youtube_transcript_api --collect-all imageio_ffmpeg --collect-all flask --collect-all gevent --collect-all python-dotenv app_gui.py
 
 echo.
 echo =======================================================

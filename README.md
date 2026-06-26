@@ -1,14 +1,76 @@
 # AI Subtitles & Voice Synthesis Studio (Dubbing Pro) & OpenAI Edge-TTS API 🗣️📺
 
-[![GitHub stars](https://img.shields.io/github/stars/travisvn/openai-edge-tts?style=social)](https://github.com/travisvn/openai-edge-tts)
-[![GitHub forks](https://img.shields.io/github/forks/travisvn/openai-edge-tts?style=social)](https://github.com/travisvn/openai-edge-tts)
-[![Discord](https://img.shields.io/badge/Discord-Voice_AI_%26_TTS_Tools-blue?logo=discord&logoColor=white)](https://discord.gg/GkFbBCBqJ6)
+[![GitHub stars](https://img.shields.io/github/stars/than0mua-chat/dubbing-pro?style=social)](https://github.com/than0mua-chat/dubbing-pro)
+[![GitHub forks](https://img.shields.io/github/than0mua-chat/dubbing-pro?style=social)](https://github.com/than0mua-chat/dubbing-pro)
 
-A comprehensive, commercial-grade suite for automatic video dubbing, subtitle download, high-speed text-to-speech (TTS) synthesis, and local OpenAI-compatible voice services.
+[**[English Version below]**](#english-version)
 
-This repository contains two main components:
-1. **Desktop GUI Application (`app_gui.py`)**: A professional studio interface for downloading subtitles from YouTube, translating them, generating high-speed concurrent TTS audio, and merging audio back into video.
-2. **OpenAI-Compatible Edge-TTS API Server (`app/server.py`)**: A lightweight Python server that emulates the OpenAI TTS API (`/v1/audio/speech`) using the free Microsoft Edge TTS or ElevenLabs engines.
+---
+
+# BẢN TIẾNG VIỆT (VIETNAMESE VERSION)
+
+Bộ công cụ thương mại chuyên nghiệp phục vụ thuyết minh tự động (Dubbing), tải phụ đề YouTube chất lượng cao, chuyển đổi văn bản thành giọng nói (TTS) tốc độ cao và cung cấp máy chủ dịch vụ giọng nói tương thích OpenAI API.
+
+Dự án gồm 2 thành phần cốt lõi:
+1. **Desktop GUI Studio (`app_gui.py`)**: Giao diện máy tính chuyên nghiệp để biên tập phụ đề, tải & dịch phụ đề YouTube, gọi TTS đa luồng và đồng bộ ghép âm thanh/phụ đề vào video gốc.
+2. **OpenAI-Compatible Edge-TTS API Server (`app/server.py`)**: Máy chủ API giả lập OpenAI TTS (`/v1/audio/speech`) để các ứng dụng bên thứ ba (như Open WebUI, AnythingLLM,...) kết nối và sử dụng giọng đọc Edge-TTS hoặc ElevenLabs.
+
+---
+
+## 📺 Thành phần 1: Ứng dụng Desktop GUI Studio (Dubbing Pro)
+
+Giao diện đồ họa tối ưu hóa quy trình làm việc từ việc chuẩn bị văn bản đến khi xuất bản video thuyết minh hoàn chỉnh.
+
+### Các tính năng chính
+*   **📥 Tải phụ đề YouTube thông minh**:
+    *   Tự động trích xuất Video ID từ mọi dạng link YouTube (watch, shorts, embed, share).
+    *   Tải danh sách phụ đề (cả thủ công và tự động) qua Proxy Pool để tránh bị chặn IP.
+    *   **Google Translate theo lô (Batch)**: Tự động tải bản gốc (English) và dịch chất lượng cao qua Google Translate theo từng cụm dưới 3000 ký tự. Loại bỏ hoàn toàn lỗi dịch thiếu/trộn tiếng Anh của YouTube.
+*   **🗣️ Thuật toán ghép nối âm thanh chuyên nghiệp**:
+    *   **Khớp Timeline video**: Tự động chèn khoảng lặng (silence) để âm thanh khớp chuẩn xác với thời gian gốc của phụ đề trong video.
+    *   **Bù khoảng lặng ở cuối (End-Silence Padding)**: Tự động tính toán chênh lệch và chèn thêm khoảng lặng ở cuối file âm thanh nếu câu cuối cùng bị lỗi hoặc kết thúc sớm, giúp âm thanh và phụ đề khớp 100% thời lượng với video gốc.
+    *   **Ngắt nghỉ theo ngữ cảnh**: Tự động phát hiện dấu câu (dấu `,` ngắt nghỉ ngắn, dấu `.!?` nghỉ dài) và viết hoa/thường để tạo khoảng lặng thở tự nhiên.
+*   **🎬 Ghép nối trực tiếp vào Video (FFmpeg)**:
+    *   Mux trực tiếp luồng âm thanh đã căn chỉnh và file phụ đề `.srt` vào video gốc chỉ bằng 1 cú nhấp chuột.
+
+### Hướng dẫn sử dụng & Chạy ứng dụng
+1.  **Cài đặt thư viện cần thiết**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  **Khởi chạy giao diện**:
+    Double-click vào tệp **`run_app.bat`** hoặc chạy lệnh:
+    ```bash
+    python app_gui.py
+    ```
+
+### 📦 Hướng dẫn đóng gói ứng dụng (Deploy Standalone)
+Để đóng gói toàn bộ ứng dụng (bao gồm giao diện, thuật toán xử lý âm thanh và máy chủ API nền) thành file chạy độc lập `.exe` trên Windows:
+*   Chạy tệp **`build_exe.bat`**.
+*   Thư mục đóng gói sẽ được tạo ra tại **`dist\DubbingPro`**.
+*   Người dùng chỉ cần chạy tệp **`dist\DubbingPro\DubbingPro.exe`** mà không cần cài đặt Python hoặc bất kỳ thư viện nào khác trên máy.
+
+---
+
+## 🗣️ Thành phần 2: Máy chủ API tương thích OpenAI TTS
+
+Giả lập chuẩn endpoint `/v1/audio/speech` của OpenAI để thay thế trực tiếp vào các hệ thống chat AI, trợ lý ảo.
+
+### Các tính năng chính
+*   **Edge-TTS miễn phí**: Dịch vụ giọng nói Microsoft Edge chất lượng cao, hoàn toàn miễn phí không cần API Key.
+*   **ElevenLabs tích hợp**: Hỗ trợ giọng đọc cao cấp của ElevenLabs với cơ chế xoay vòng tài khoản/API key.
+*   **SSE Streaming**: Truyền phát luồng âm thanh thời gian thực qua Server-Sent Events.
+
+### Khởi chạy bằng Docker
+```bash
+docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest
+```
+
+---
+
+# ENGLISH VERSION
+
+A commercial-grade suite for automatic video dubbing, subtitle downloads, high-speed TTS synthesis, and local OpenAI-compatible voice services.
 
 ---
 
@@ -18,52 +80,36 @@ An advanced graphical interface designed to simplify the workflow of dubbing vid
 
 ### Key Features
 *   **📥 YouTube Subtitle Downloader**:
-    *   Automatic Video ID extraction from any YouTube URL (Watch, Shorts, Embed, Share links).
-    *   Scrapes manual and auto-generated transcripts with automatic proxy pool routing.
-    *   **High-Fidelity Google Translation**: Bypasses YouTube's buggy machine translator by downloading the original transcript and batch-translating it via Google Translate. This prevents mixed-language output (half-English, half-Vietnamese).
-*   **⚡ Concurrency & Proxy Pool**:
-    *   Supports multithreaded processing for ElevenLabs and asyncio batch processing for Edge-TTS.
-    *   Integrated Proxy Pool manager that rotates active proxies and automatically retries failed network requests up to 3 times to prevent IP bans.
+    *   Extracts Video ID from any YouTube URL and fetches manual/auto-generated transcripts.
+    *   **High-Fidelity Google Translation**: Bypasses YouTube's buggy machine translator by downloading the original transcript and batch-translating it via Google Translate.
 *   **🗣️ Professional Audio Merger**:
     *   **Timeline Alignment**: Inserts precise silence blocks to align the voice output with original video timestamps.
-    *   **End-Silence Padding**: Automatically calculates the duration difference between synthesized audio and the original subtitle track, appending trailing silence to match the video duration 100% (fixing early cut-offs).
+    *   **End-Silence Padding**: Appends trailing silence to match the original video duration 100%, preventing early cut-offs.
     *   **Context-Aware Pauses**: Analyzes text casing and punctuation (mild marks like `,` vs. sentence enders like `.` or `?`) to determine natural breathing pauses.
 *   **🎬 FFmpeg Video Muxer**:
-    *   Merges the final aligned audio track and subtitles directly back into the original video with a single click.
+    *   Merges the final aligned audio track and subtitles directly back into the original video.
 
-### Getting Started with the GUI
+### Running & Packaging the GUI
 
-#### Prerequisites
-Make sure you have Python 3.9+ and FFmpeg installed on your system.
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Launch the desktop studio:
-   ```bash
-   python app_gui.py
-   ```
-   *(Or run `run_app.bat` on Windows)*
+1.  **Run Locally**:
+    ```bash
+    pip install -r requirements.txt
+    python app_gui.py
+    ```
+    *(Or run `run_app.bat` on Windows)*
 
-#### 📦 Standalone Build (Packaging for Deployment)
-To compile and distribute the GUI application as a standalone Windows executable (`.exe`), you can use the automated build script. This bundles Python, the Tkinter framework, and all dependencies into a single package:
-*   Double-click and run **`build_exe.bat`** on Windows.
-*   Once completed, the standalone folder will be generated in **`dist\DubbingPro`**.
-*   Users can launch the studio directly via **`dist\DubbingPro\DubbingPro.exe`** without needing Python or `pip` installations.
+2.  **📦 Standalone Packaging (PyInstaller)**:
+    *   Run **`build_exe.bat`** on Windows.
+    *   The compiled standalone app will be created in **`dist\DubbingPro`**.
+    *   Users can launch the studio via **`dist\DubbingPro\DubbingPro.exe`** without Python.
 
 ---
 
 ## 🗣️ Component 2: OpenAI-Compatible Edge-TTS API Server
 
-A lightweight service that emulates the OpenAI TTS API (`/v1/audio/speech`) using the free Microsoft Edge TTS engine (online, no subscription required) and ElevenLabs. It is highly suited as a drop-in replacement for tools like Open WebUI, AnythingLLM, etc.
-
-### Features
-*   **OpenAI Compatibility**: Standard request structure supporting voice mapping and playback speed adjustments.
-*   **SSE Streaming**: Real-time audio streaming via Server-Sent Events (`stream_format: "sse"`).
-*   **Flexible Formats**: Supports `mp3`, `opus`, `aac`, `flac`, `wav`, and `pcm`.
+A lightweight service that emulates the OpenAI TTS API (`/v1/audio/speech`) using the free Microsoft Edge TTS or ElevenLabs.
 
 ### Quick Start with Docker
-The simplest way to spin up the API server:
 ```bash
 docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest
 ```
@@ -73,7 +119,7 @@ Access the server API at `http://localhost:5050/v1/audio/speech`.
 
 ## ⚙️ Configuration (.env)
 
-Create a `.env` file in the root directory to customize the API server and GUI default behaviors:
+Create a `.env` file in the root directory to customize default behaviors:
 
 ```ini
 API_KEY=your_api_key_here
@@ -94,31 +140,6 @@ DETAILED_ERROR_LOGGING=True
 
 ---
 
-## 🛠️ Verification & Development
+## 🤝 License
 
-To compile and verify the GUI code without running it:
-```bash
-python -m py_compile app_gui.py
-```
-
-### API Endpoint Test Example
-You can send a standard OpenAI payload to test the local server:
-```bash
-curl http://localhost:5050/v1/audio/speech \
-  -H "Authorization: Bearer your_api_key_here" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "tts-1",
-    "input": "Xin chào! Đây là bản thuyết minh tự động từ hệ thống Dubbing Pro.",
-    "voice": "vi-VN-NamMinhNeural"
-  }' \
-  --output test_output.mp3
-```
-
----
-
-## 🤝 Contribution & License
-
-This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. 
-
-If you find this project helpful, please give it a **⭐️ Star** on GitHub!
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**.
