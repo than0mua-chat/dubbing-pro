@@ -2018,10 +2018,26 @@ class TTSApp:
         self.lbl_status_log.configure(text="Đang kết nối Gemini AI để khôi phục cấu trúc phụ đề...")
         
         def bg_thread():
+            proxy_str = None
             try:
                 from text_processor import merge_subtitle_items_gemini
                 
-                merged = merge_subtitle_items_gemini(self.import_items, api_key)
+                # Retrieve active proxy from ProxyManager
+                proxy_str = self.proxy_manager.get_proxy(service_type="ElevenLabs")
+                if proxy_str:
+                    self.update_queue.put(("log", f"Sử dụng proxy cho Gemini: {proxy_str}"))
+                else:
+                    self.update_queue.put(("log", "Không có proxy, kết nối trực tiếp đến Gemini AI..."))
+                
+                start_t = time.time()
+                merged = merge_subtitle_items_gemini(self.import_items, api_key, proxy=proxy_str)
+                latency = time.time() - start_t
+                
+                if proxy_str:
+                    try:
+                        self.proxy_manager.report_success(proxy_str, latency)
+                    except Exception:
+                        pass
                 
                 if not merged:
                     self.update_queue.put(("log", "Lỗi: Không nhận được dữ liệu hợp lệ từ Gemini AI."))
@@ -2039,12 +2055,18 @@ class TTSApp:
             except Exception as e:
                 print(f"Gemini restoration thread error: {e}")
                 err_msg = str(e)
+                if proxy_str:
+                    try:
+                        self.proxy_manager.report_failure(proxy_str)
+                    except Exception:
+                        pass
+                
                 if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                     friendly_err = "Đã vượt quá giới hạn cuộc gọi (Rate Limit 429) của API Gemini miễn phí. Vui lòng chờ 1 phút hoặc đổi khóa khác."
                 elif "400" in err_msg or "API_KEY_INVALID" in err_msg:
                     friendly_err = "Khóa API Gemini không chính xác hoặc không hợp lệ. Vui lòng kiểm tra lại."
                 else:
-                    friendly_err = f"Lỗi gọi API Gemini: {err_msg[:120]}"
+                    friendly_err = f"Lỗi gọi API Gemini: {err_msg}"
                     
                 self.update_queue.put(("log", f"Lỗi khôi phục phụ đề AI: {friendly_err}"))
                 self.root.after(0, lambda: messagebox.showerror("Lỗi Gemini AI", friendly_err, parent=self.root))

@@ -571,7 +571,7 @@ def split_long_clause(clause_chars, max_len=80):
     return [p for p in parts if p]
 
 
-def merge_subtitle_items_gemini(items, api_key):
+def merge_subtitle_items_gemini(items, api_key, proxy=None):
     """
     Restores punctuation and merges subtitle items using Google Gemini 1.5 Flash API.
     Realigns timestamps using SequenceMatcher based character interpolation.
@@ -633,7 +633,6 @@ def merge_subtitle_items_gemini(items, api_key):
         f"Here is the raw subtitle text:\n---\n{raw_text}\n---\nRestored text:"
     )
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
@@ -643,8 +642,37 @@ def merge_subtitle_items_gemini(items, api_key):
         }]
     }
     
-    res = requests.post(url, headers=headers, json=payload, timeout=30)
-    res.raise_for_status()
+    proxies = None
+    if proxy:
+        proxies = {
+            "http": proxy,
+            "https": proxy
+        }
+        
+    # Try stable v1 first, then fallback to v1beta
+    endpoints = [
+        f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    ]
+    
+    res = None
+    last_err = None
+    for endpoint in endpoints:
+        try:
+            res = requests.post(endpoint, headers=headers, json=payload, proxies=proxies, timeout=30)
+            if res.status_code == 200:
+                break
+        except Exception as e:
+            last_err = e
+            
+    if res is None or res.status_code != 200:
+        if res is not None:
+            res.raise_for_status()
+        elif last_err:
+            raise last_err
+        else:
+            raise RuntimeError("Failed to connect to Gemini API (404 Not Found or Connection Error).")
+            
     res_data = res.json()
     
     try:
