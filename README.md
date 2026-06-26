@@ -52,19 +52,29 @@ Giao diện đồ họa tối ưu hóa quy trình làm việc từ việc chuẩ
 
 ---
 
-## 🗣️ Thành phần 2: Máy chủ API tương thích OpenAI TTS
+## 🗣️ Thành phần 2: Máy chủ Giả lập Đa API (Multi-API Emulation Backend)
 
-Giả lập chuẩn endpoint `/v1/audio/speech` của OpenAI để thay thế trực tiếp vào các hệ thống chat AI, trợ lý ảo.
+Máy chủ dịch vụ trung gian chạy ngầm (mặc định trên cổng `5050`), cung cấp các cổng kết nối API chuẩn hóa, cho phép các ứng dụng bên thứ ba dễ dàng cấu hình và sử dụng công nghệ chuyển giọng nói miễn phí.
 
-### Các tính năng chính
-*   **Edge-TTS miễn phí**: Dịch vụ giọng nói Microsoft Edge chất lượng cao, hoàn toàn miễn phí không cần API Key.
-*   **ElevenLabs tích hợp**: Hỗ trợ giọng đọc cao cấp của ElevenLabs với cơ chế xoay vòng tài khoản/API key.
-*   **SSE Streaming**: Truyền phát luồng âm thanh thời gian thực qua Server-Sent Events.
+### Các tính năng chính của Backend:
+*   **Giả lập OpenAI Speech API (`/v1/audio/speech`)**: Đóng vai trò như một drop-in replacement hoàn hảo cho OpenAI TTS, tương thích tốt với Open WebUI, AnythingLLM, và các nền tảng AI.
+*   **Giả lập ElevenLabs API (`/elevenlabs/v1/text-to-speech/<voice_id>`)**: Cho phép các phần mềm/ứng dụng chỉ hỗ trợ ElevenLabs có thể trỏ về địa chỉ local này để chuyển đổi text sang giọng đọc Edge-TTS hoàn toàn miễn phí.
+*   **Giả lập Microsoft Azure Speech API (`/azure/cognitiveservices/v1`)**: Biên dịch các yêu cầu chuẩn SSML của Azure sang giọng đọc Edge-TTS.
+*   **Xoay vòng và Xử lý ElevenLabs**: Quản lý pool API keys ElevenLabs nâng cao, hỗ trợ tự động xoay vòng tài khoản.
+*   **Truyền phát Luồng âm thanh (SSE Streaming)**: Hỗ trợ truyền phát âm thanh thời gian thực qua cơ chế Server-Sent Events (`stream_format: "sse"`).
+*   **Bộ lọc Chuẩn hóa Văn bản**: Tiền xử lý văn bản đầu vào (loại bỏ biểu tượng cảm xúc, dọn dẹp cấu trúc Markdown, chuyển đổi tiêu đề thành giọng văn mô tả, lọc ký tự đặc biệt).
+*   **Cung cấp dữ liệu cho GUI**: Endpoint `/v1/voices/all` chịu trách nhiệm cung cấp danh sách giọng đọc và cấu hình cho giao diện Desktop chính.
 
-### Khởi chạy bằng Docker
-```bash
-docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest
-```
+### Cách khởi chạy độc lập
+*   **Sử dụng Docker**:
+    ```bash
+    docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest
+    ```
+*   **Chạy trực tiếp bằng Python**:
+    ```bash
+    set PYTHONPATH=app
+    python app/server.py
+    ```
 
 ---
 
@@ -105,15 +115,28 @@ An advanced graphical interface designed to simplify the workflow of dubbing vid
 
 ---
 
-## 🗣️ Component 2: OpenAI-Compatible Edge-TTS API Server
+## 🗣️ Component 2: Multi-API Emulation Backend Server
 
-A lightweight service that emulates the OpenAI TTS API (`/v1/audio/speech`) using the free Microsoft Edge TTS or ElevenLabs.
+A lightweight, local proxy server running on port `5050` by default. It emulates multiple commercial TTS endpoints, enabling client software to use free Edge-TTS or proxy ElevenLabs.
 
-### Quick Start with Docker
-```bash
-docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest
-```
-Access the server API at `http://localhost:5050/v1/audio/speech`.
+### Core Backend Features:
+*   **OpenAI TTS API Emulation (`/v1/audio/speech`)**: Drop-in replacement for OpenAI's speech endpoint, fully compatible with Open WebUI, AnythingLLM, and other AI frameworks.
+*   **ElevenLabs API Emulation (`/elevenlabs/v1/text-to-speech/<voice_id>`)**: Translates ElevenLabs-style requests into free Microsoft Edge-TTS audio. Useful for applications that hardcode ElevenLabs support.
+*   **Azure Speech API Emulation (`/azure/cognitiveservices/v1`)**: Parses Azure SSML documents and synthesizes speech using the local Edge-TTS engine.
+*   **SSE Streaming Support**: Real-time audio streaming via Server-Sent Events.
+*   **Text Preprocessing Pipeline**: Automatically strips Markdown syntax, removes emojis, announces headers, and normalizes line breaks before rendering speech.
+*   **GUI Controller Endpoint**: Exposes `/v1/voices/all` which dynamically provides voice listings and features configurations to the desktop GUI.
+
+### How to Run Independently
+*   **With Docker**:
+    ```bash
+    docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest
+    ```
+*   **With Python**:
+    ```bash
+    set PYTHONPATH=app
+    python app/server.py
+    ```
 
 ---
 
