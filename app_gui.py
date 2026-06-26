@@ -2124,23 +2124,35 @@ class TTSApp:
                             # Punctuation/Context aware checks
                             # Rule 1: Check if prev ends with sentence punctuation (. ! ? ...)
                             import re
+                            
+                            # Clean text for context checks (strip HTML tags and sound annotations)
+                            def clean_sub_text(t):
+                                if not t:
+                                    return ""
+                                t = re.sub(r'</?[^>]+(>|$)', '', t)
+                                t = re.sub(r'\([^)]*\)|\[[^\]]*\]', '', t)
+                                return t.strip()
+                                
+                            clean_prev = clean_sub_text(prev_text)
+                            clean_curr = clean_sub_text(curr_text)
+                            
                             ends_with_sentence_ender = False
-                            if prev_text:
-                                if re.search(r'[.!?](\"|\'|\)|\)|\]|\})*$', prev_text) or prev_text.endswith('...'):
+                            if clean_prev:
+                                if re.search(r'[.!?](\"|\'|\)|\)|\]|\})*$', clean_prev) or clean_prev.endswith('...'):
                                     ends_with_sentence_ender = True
                                     
                             # Rule 2: Check if next starts with a lowercase letter
                             starts_with_lowercase = False
-                            if curr_text:
-                                match = re.search(r'\w', curr_text)
+                            if clean_curr:
+                                match = re.search(r'\w', clean_curr)
                                 if match:
                                     if match.group(0).islower():
                                         starts_with_lowercase = True
                                         
                             # Rule 3: Check if prev ends with mild punctuation (, : ; -)
                             ends_with_mild_punctuation = False
-                            if prev_text and not ends_with_sentence_ender:
-                                if prev_text[-1] in [',', ':', ';', '-']:
+                            if clean_prev and not ends_with_sentence_ender:
+                                if clean_prev[-1] in [',', ':', ';', '-']:
                                     ends_with_mild_punctuation = True
                                     
                             is_continuation = False
@@ -2226,19 +2238,31 @@ class TTSApp:
                             curr_text = item["text"].strip()
                             
                             import re
+                            
+                            # Clean text for context checks (strip HTML tags and sound annotations)
+                            def clean_sub_text(t):
+                                if not t:
+                                    return ""
+                                t = re.sub(r'</?[^>]+(>|$)', '', t)
+                                t = re.sub(r'\([^)]*\)|\[[^\]]*\]', '', t)
+                                return t.strip()
+                                
+                            clean_prev = clean_sub_text(prev_text)
+                            clean_curr = clean_sub_text(curr_text)
+                            
                             ends_with_sentence_ender = False
-                            if prev_text:
-                                if re.search(r'[.!?](\"|\'|\)|\)|\]|\})*$', prev_text) or prev_text.endswith('...'):
+                            if clean_prev:
+                                if re.search(r'[.!?](\"|\'|\)|\)|\]|\})*$', clean_prev) or clean_prev.endswith('...'):
                                     ends_with_sentence_ender = True
                             starts_with_lowercase = False
-                            if curr_text:
-                                match = re.search(r'\w', curr_text)
+                            if clean_curr:
+                                match = re.search(r'\w', clean_curr)
                                 if match:
                                     if match.group(0).islower():
                                         starts_with_lowercase = True
                             ends_with_mild_punctuation = False
-                            if prev_text and not ends_with_sentence_ender:
-                                if prev_text[-1] in [',', ':', ';', '-']:
+                            if clean_prev and not ends_with_sentence_ender:
+                                if clean_prev[-1] in [',', ':', ';', '-']:
                                     ends_with_mild_punctuation = True
                                     
                             is_continuation = False
