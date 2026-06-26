@@ -1827,7 +1827,132 @@ class TTSApp:
             messagebox.showwarning("Định dạng câu", "Danh sách rỗng. Vui lòng nhập file phụ đề trước!")
             return
             
+        # Get GEMINI_API_KEY from environment
+        env_gemini_key = os.getenv("GEMINI_API_KEY", "")
+        
+        # Show configuration dialog
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Định dạng & Phục hồi phụ đề")
+        dlg.geometry("450x260")
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        
+        # Center dialog
+        dlg.update_idletasks()
+        rx = self.root.winfo_x()
+        ry = self.root.winfo_y()
+        rw = self.root.winfo_width()
+        rh = self.root.winfo_height()
+        w = dlg.winfo_width()
+        h = dlg.winfo_height()
+        dlg.geometry(f"+{rx + (rw - w) // 2}+{ry + (rh - h) // 2}")
+        
+        self.apply_dark_theme(dlg)
+        
+        # Title
+        ttk.Label(dlg, text="Chọn phương án xử lý phụ đề", font=("Segoe UI", 11, "bold")).pack(pady=10)
+        
+        # Options Frame
+        opts_frame = ttk.Frame(dlg, padding=10)
+        opts_frame.pack(fill=tk.X, padx=15)
+        
+        var_mode = tk.StringVar(value="local")
+        
+        def on_mode_change():
+            if var_mode.get() == "gemini":
+                key_entry.configure(state="normal")
+                chk_save.configure(state="normal")
+            else:
+                key_entry.configure(state="disabled")
+                chk_save.configure(state="disabled")
+                
+        r_local = ttk.Radiobutton(opts_frame, text="Phương án A: Heuristic Cục bộ (Offline)", variable=var_mode, value="local", command=on_mode_change)
+        r_local.pack(anchor=tk.W, pady=2)
+        
+        r_gemini = ttk.Radiobutton(opts_frame, text="Phương án B: Trí tuệ nhân tạo Gemini AI (Online)", variable=var_mode, value="gemini", command=on_mode_change)
+        r_gemini.pack(anchor=tk.W, pady=2)
+        
+        # Key entry frame
+        key_frame = ttk.Frame(dlg, padding=5)
+        key_frame.pack(fill=tk.X, padx=20)
+        
+        ttk.Label(key_frame, text="Gemini API Key:").pack(side=tk.LEFT, padx=(0, 5))
+        key_entry = ttk.Entry(key_frame, width=32, show="*")
+        key_entry.insert(0, env_gemini_key)
+        key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        key_entry.configure(state="disabled")
+        
+        # Save key checkbox
+        chk_frame = ttk.Frame(dlg, padding=2)
+        chk_frame.pack(fill=tk.X, padx=20)
+        var_save_key = tk.BooleanVar(value=True)
+        chk_save = ttk.Checkbutton(chk_frame, text="Lưu API Key vào file .env", variable=var_save_key)
+        chk_save.pack(anchor=tk.W)
+        chk_save.configure(state="disabled")
+        
+        # If there's an API Key in env, default to gemini AI option
+        if env_gemini_key:
+            var_mode.set("gemini")
+            on_mode_change()
+            
+        def on_confirm():
+            mode = var_mode.get()
+            api_key = key_entry.get().strip()
+            save_key = var_save_key.get()
+            
+            if mode == "gemini" and not api_key:
+                messagebox.showerror("Lỗi", "Vui lòng nhập Gemini API Key để tiếp tục!", parent=dlg)
+                return
+                
+            dlg.destroy()
+            
+            if mode == "gemini":
+                # Save key to .env if requested
+                if save_key:
+                    self.save_gemini_key_to_env(api_key)
+                # Run Gemini restructuring in background
+                self.run_gemini_restoration(api_key)
+            else:
+                # Run local heuristics directly
+                self.run_local_merging()
+                
+        btn_frame = ttk.Frame(dlg, padding=10)
+        btn_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        ttk.Button(btn_frame, text="✅ Xác Nhận", width=12, style="Start.TButton", command=on_confirm).pack(side=tk.RIGHT, padx=(5, 15))
+        ttk.Button(btn_frame, text="❌ Hủy", width=10, command=dlg.destroy).pack(side=tk.RIGHT, padx=5)
+
+    def save_gemini_key_to_env(self, api_key):
+        try:
+            dotenv_path = ".env"
+            lines = []
+            key_found = False
+            
+            if os.path.exists(dotenv_path):
+                with open(dotenv_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip().startswith("GEMINI_API_KEY="):
+                            lines.append(f"GEMINI_API_KEY={api_key}\n")
+                            key_found = True
+                        else:
+                            lines.append(line)
+                            
+            if not key_found:
+                if lines and not lines[-1].endswith("\n"):
+                    lines.append("\n")
+                lines.append(f"GEMINI_API_KEY={api_key}\n")
+                
+            with open(dotenv_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+                
+            os.environ["GEMINI_API_KEY"] = api_key
+            self.update_queue.put(("log", "Đã lưu Gemini API Key vào file .env thành công!"))
+        except Exception as e:
+            print(f"Error saving Gemini key to env: {e}")
+
+    def run_local_merging(self):
         from text_processor import merge_subtitle_items
+        self.lbl_status_log.configure(text="Đang định dạng câu bằng thuật toán Heuristic...")
         
         merged = merge_subtitle_items(self.import_items)
         if len(merged) == len(self.import_items):
@@ -1839,7 +1964,9 @@ class TTSApp:
         if not messagebox.askokcancel("Định dạng câu", msg):
             return
             
-        # Assign id and stt sequentially to prevent KeyError
+        self.update_import_list_with_merged(merged)
+
+    def update_import_list_with_merged(self, merged):
         for i, item in enumerate(merged):
             item["id"] = i
             item["stt"] = i + 1
@@ -1852,7 +1979,6 @@ class TTSApp:
             
         self.import_items = merged
         
-        # Clear tree and rebuild
         for row in self.tree.get_children():
             self.tree.delete(row)
             
@@ -1871,8 +1997,8 @@ class TTSApp:
         self.lbl_proxy_status.configure(text="Die:0 / Err:0/4")
         self.update_stats_label()
         
-        # Automatically export SRT file right after formatting/merging
         save_path = os.path.abspath(os.path.join(self.output_dir, f"{self.get_base_filename()}_tts.srt"))
+        from text_processor import write_srt_file
         srt_items = []
         for i, item in enumerate(self.import_items):
             srt_items.append({
@@ -1887,6 +2013,43 @@ class TTSApp:
             messagebox.showinfo("Thành công", f"Đã định dạng thành công và xuất file phụ đề tại:\n{save_path}")
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể ghi file phụ đề: {e}")
+
+    def run_gemini_restoration(self, api_key):
+        self.lbl_status_log.configure(text="Đang kết nối Gemini AI để khôi phục cấu trúc phụ đề...")
+        
+        def bg_thread():
+            try:
+                from text_processor import merge_subtitle_items_gemini
+                
+                merged = merge_subtitle_items_gemini(self.import_items, api_key)
+                
+                if not merged:
+                    self.update_queue.put(("log", "Lỗi: Không nhận được dữ liệu hợp lệ từ Gemini AI."))
+                    self.root.after(0, lambda: messagebox.showerror("Lỗi", "Không nhận được kết quả hợp lệ từ Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng.", parent=self.root))
+                    return
+                    
+                def on_success():
+                    msg = f"Đã khôi phục bằng Gemini AI: Gộp {len(self.import_items)} dòng thành {len(merged)} câu hoàn chỉnh.\n\n" \
+                          f"Cập nhật danh sách mới?"
+                    if messagebox.askokcancel("Định dạng câu AI", msg, parent=self.root):
+                        self.update_import_list_with_merged(merged)
+                        
+                self.root.after(0, on_success)
+                
+            except Exception as e:
+                print(f"Gemini restoration thread error: {e}")
+                err_msg = str(e)
+                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                    friendly_err = "Đã vượt quá giới hạn cuộc gọi (Rate Limit 429) của API Gemini miễn phí. Vui lòng chờ 1 phút hoặc đổi khóa khác."
+                elif "400" in err_msg or "API_KEY_INVALID" in err_msg:
+                    friendly_err = "Khóa API Gemini không chính xác hoặc không hợp lệ. Vui lòng kiểm tra lại."
+                else:
+                    friendly_err = f"Lỗi gọi API Gemini: {err_msg[:120]}"
+                    
+                self.update_queue.put(("log", f"Lỗi khôi phục phụ đề AI: {friendly_err}"))
+                self.root.after(0, lambda: messagebox.showerror("Lỗi Gemini AI", friendly_err, parent=self.root))
+                
+        threading.Thread(target=bg_thread, daemon=True).start()
 
     # Automatically generate SRT silently when join is successful
     def generate_srt_file_silent(self):

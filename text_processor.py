@@ -439,3 +439,273 @@ def redistribute_subtitles_timing(merged_items):
             
     return redistributed_items
 
+
+def align_punctuated_text(orig_chars, new_text):
+    """
+    Align the characters of new_text with the timestamp-labeled characters of the original text.
+    orig_chars: list of tuples (char, timestamp, item_idx, is_boundary)
+    new_text: str (the punctuated/corrected text returned by Gemini or LLM)
+    
+    Returns:
+        list of tuples (char, timestamp, item_idx, is_boundary) for the new_text.
+    """
+    import difflib
+    # Extract the plain text from orig_chars
+    orig_text = "".join(c[0] for c in orig_chars)
+    
+    # Use SequenceMatcher to find matching blocks
+    matcher = difflib.SequenceMatcher(None, orig_text, new_text)
+    matching_blocks = matcher.get_matching_blocks()
+    
+    new_timestamps = [None] * len(new_text)
+    
+    # Step 1: Map matching characters
+    for block in matching_blocks:
+        a_start, b_start, size = block
+        for k in range(size):
+            orig_idx = a_start + k
+            new_idx = b_start + k
+            new_timestamps[new_idx] = orig_chars[orig_idx]
+            
+    # Step 2: Interpolate missing timestamps
+    # Find first valid timestamp to fallback for prefix
+    first_valid = None
+    for t in new_timestamps:
+        if t is not None:
+            first_valid = t
+            break
+    if not first_valid:
+        # Fallback if no match at all
+        return [(c, 0.0, 0, False) for c in new_text]
+        
+    # Fill prefix
+    last_valid = first_valid
+    for idx in range(len(new_text)):
+        if new_timestamps[idx] is None:
+            new_timestamps[idx] = (new_text[idx], last_valid[1], last_valid[2], False)
+        else:
+            last_valid = new_timestamps[idx]
+            break
+            
+    # Fill suffix and intermediate gaps
+    last_valid_idx = 0
+    for idx in range(len(new_text)):
+        if new_timestamps[idx] is not None:
+            # Fill gap between last_valid_idx and idx
+            if idx > last_valid_idx + 1:
+                t_start = new_timestamps[last_valid_idx][1]
+                t_end = new_timestamps[idx][1]
+                item_idx = new_timestamps[idx][2]
+                gap_size = idx - last_valid_idx
+                for g in range(last_valid_idx + 1, idx):
+                    ratio = (g - last_valid_idx) / gap_size
+                    t_interp = t_start + ratio * (t_end - t_start)
+                    new_timestamps[g] = (new_text[g], t_interp, item_idx, False)
+            last_valid_idx = idx
+            
+    # Fill suffix
+    last_t = new_timestamps[last_valid_idx]
+    for idx in range(last_valid_idx + 1, len(new_text)):
+        new_timestamps[idx] = (new_text[idx], last_t[1], last_t[2], False)
+        
+    return new_timestamps
+
+
+def split_long_clause(clause_chars, max_len=80):
+    """
+    If a clause is too long (> max_len chars), split it at commas or common conjunctions.
+    """
+    import re
+    clause_text = "".join(ct[0] for ct in clause_chars)
+    if len(clause_text) <= max_len:
+        return [clause_chars]
+        
+    # Find potential split points: commas or conjunctions
+    split_points = []
+    conjunctions = ["and", "or", "but", "và", "hoặc", "nhưng", "mà", "là", "vì", "nên", "được"]
+    
+    i = 0
+    while i < len(clause_chars):
+        c = clause_chars[i][0]
+        # Check for comma
+        if c == ',':
+            split_points.append(i + 1)  # split after comma
+        # Check for conjunction
+        elif c == ' ':
+            # Peek next word
+            word_chars = []
+            j = i + 1
+            while j < len(clause_chars) and clause_chars[j][0].isalnum():
+                word_chars.append(clause_chars[j][0])
+                j += 1
+            word = "".join(word_chars).lower()
+            if word in conjunctions:
+                split_points.append(i)  # split before conjunction
+        i += 1
+        
+    if not split_points:
+        return [clause_chars]
+        
+    parts = []
+    last_split = 0
+    for sp in split_points:
+        if sp - last_split > 30 and (sp - last_split <= max_len or len(clause_chars) - sp > 30):
+            parts.append(clause_chars[last_split:sp])
+            last_split = sp
+    if last_split < len(clause_chars):
+        parts.append(clause_chars[last_split:])
+        
+    return [p for p in parts if p]
+
+
+def merge_subtitle_items_gemini(items, api_key):
+    """
+    Restores punctuation and merges subtitle items using Google Gemini 1.5 Flash API.
+    Realigns timestamps using SequenceMatcher based character interpolation.
+    """
+    if not items:
+        return []
+        
+    # Step 1: Build original character timestamps
+    char_timestamps = []
+    for idx, item in enumerate(items):
+        text = item["text"]
+        if not text:
+            continue
+        try:
+            start_t = srt_time_to_seconds(item["start"])
+            end_t = srt_time_to_seconds(item["end"])
+        except Exception:
+            start_t = 0.0
+            end_t = 0.0
+            
+        dur = end_t - start_t
+        n_chars = len(text)
+        
+        if n_chars > 0:
+            for j, c in enumerate(text):
+                t = start_t + (j / n_chars) * dur
+                char_timestamps.append((c, t, idx, False))
+                
+        char_timestamps.append((" ", end_t, idx, True))
+        
+    if not char_timestamps:
+        return []
+        
+    # Step 2: Query Gemini API to clean & restore punctuation
+    import requests
+    import json
+    import re
+    
+    # 2.1: Strip HTML tags and sound annotations from raw texts
+    raw_texts = []
+    for item in items:
+        txt = item["text"]
+        # Strip HTML
+        txt = re.sub(r'</?[^>]+(>|$)', '', txt)
+        # Strip sound descriptions in parentheses or brackets
+        txt = re.sub(r'\([^)]*\)|\[[^\]]*\]', '', txt)
+        raw_texts.append(txt.strip())
+        
+    raw_text = "\n".join(raw_texts)
+    
+    prompt = (
+        "You are an expert subtitle restorer. Your task is to process the following raw, unpunctuated subtitle transcript.\n"
+        "Please:\n"
+        "1. Restore correct capitalization and punctuation (periods, commas, question marks, exclamation marks).\n"
+        "2. Clean any formatting tags (like <i>, <b>) and non-speech sounds (like [Music], [Laughter], (applause)) - remove them completely.\n"
+        "3. Standardize and expand acronyms based on context (e.g. capitalize CISSP, CEO, AWS, IT, AI).\n"
+        "4. Maintain the exact flow and meaning of the original sentences. Do not summarize or omit speech.\n"
+        "5. Return ONLY the final restored plain text. Do not include any notes, explanations, markdown formatting, or HTML.\n\n"
+        f"Here is the raw subtitle text:\n---\n{raw_text}\n---\nRestored text:"
+    )
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{
+            "parts": [{
+                "text": prompt
+            }]
+        }]
+    }
+    
+    res = requests.post(url, headers=headers, json=payload, timeout=30)
+    res.raise_for_status()
+    res_data = res.json()
+    
+    try:
+        new_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        raise RuntimeError(f"Error parsing Gemini response: {e}. Full response: {res_data}")
+        
+    # Clean up multiple newlines or spaces returned by Gemini
+    new_text = re.sub(r'\n+', ' ', new_text)
+    new_text = re.sub(r'\s+', ' ', new_text).strip()
+    
+    # Step 3: Align character timestamps
+    new_char_timestamps = align_punctuated_text(char_timestamps, new_text)
+    
+    # Step 4: Split into sentences based on punctuation, and subdivide if too long
+    clauses = []
+    current_clause = []
+    
+    i = 0
+    while i < len(new_char_timestamps):
+        c, t, item_idx, is_b = new_char_timestamps[i]
+        current_clause.append((c, t, item_idx, is_b))
+        
+        is_ender = c in ['.', '!', '?']
+        if is_ender and c == '.':
+            # Avoid splitting on decimals (e.g., 2.5)
+            prev_digit = False
+            if i > 0 and new_char_timestamps[i-1][0].isdigit():
+                prev_digit = True
+            next_digit = False
+            if i + 1 < len(new_char_timestamps) and new_char_timestamps[i+1][0].isdigit():
+                next_digit = True
+            if prev_digit and next_digit:
+                is_ender = False
+                
+        if is_ender:
+            # Capture trailing symbols
+            while i + 1 < len(new_char_timestamps) and new_char_timestamps[i+1][0] in ['"', "'", ')', ']', '}']:
+                i += 1
+                current_clause.append(new_char_timestamps[i])
+            split_parts = split_long_clause(current_clause, max_len=80)
+            clauses.extend(split_parts)
+            current_clause = []
+        i += 1
+        
+    if current_clause:
+        split_parts = split_long_clause(current_clause, max_len=80)
+        clauses.extend(split_parts)
+        
+    # Step 5: Format into subtitle items
+    merged_items = []
+    for idx, clause_chars in enumerate(clauses):
+        text_str = "".join(ct[0] for ct in clause_chars).strip()
+        text_str = re.sub(r'\s+', ' ', text_str)
+        text_str = re.sub(r'\s+([.,!?])', r'\1', text_str)
+        
+        if not text_str:
+            continue
+            
+        start_t = clause_chars[0][1]
+        end_t = clause_chars[-1][1]
+        
+        orig_file = items[0]["file"] if items else "sub"
+        
+        merged_items.append({
+            "stt": idx + 1,
+            "file": orig_file,
+            "text": text_str,
+            "start": format_srt_time(start_t),
+            "end": format_srt_time(end_t),
+            "status": "Ready",
+            "duration": 0.0,
+            "output_path": ""
+        })
+        
+    return merged_items
+
