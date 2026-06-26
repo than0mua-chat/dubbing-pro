@@ -1,5 +1,7 @@
 # AI Subtitles & Voice Synthesis Studio (Dubbing Pro) 🗣️📺
 
+🔗 **Trang chủ / Homepage**: [https://than0mua-chat.github.io/dubbing-pro/](https://than0mua-chat.github.io/dubbing-pro/)
+
 Bộ công cụ Desktop Studio chuyên nghiệp phục vụ thuyết minh tự động (Dubbing), tải phụ đề YouTube chất lượng cao, chuyển đổi văn bản thành giọng nói (TTS) tốc độ cao và tự động hóa quy trình mux video, hoạt động 100% độc lập không cần máy chủ API nền.
 
 A professional desktop software suite designed for automatic video dubbing, YouTube subtitle downloading, high-speed text-to-speech (TTS) synthesis, and automated video muxing, running 100% standalone without any background API server.
