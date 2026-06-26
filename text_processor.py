@@ -322,8 +322,21 @@ def merge_subtitle_items(items):
                 else:
                     clause_text = "".join(ct[0] for ct in current_clause_chars).strip()
                     word_count = len(clause_text.split())
+                    
                     if word_count >= 25 or len(clause_text) >= 150:
-                        is_ender = True
+                        last_word = clause_text.split()[-1].lower() if clause_text.split() else ""
+                        # Conjunctions, prepositions, and determiners that should not end a split
+                        bad_ends = ["và", "hoặc", "nhưng", "mà", "là", "với", "của", "mọi", "các", "những", "để", "cho", "trong", "tại", "and", "or", "but", "with", "of", "to", "in", "for", "the", "a", "an"]
+                        is_next_lowercase = next_first_char and next_first_char.islower()
+                        
+                        if is_next_lowercase:
+                            # If the next word starts with a lowercase letter, only split if it is extremely long
+                            if word_count >= 50 or len(clause_text) >= 300:
+                                if last_word not in bad_ends:
+                                    is_ender = True
+                        else:
+                            if last_word not in bad_ends:
+                                is_ender = True
         
         if is_ender:
             # Capture any trailing quotes or brackets (e.g. ." or ?))
