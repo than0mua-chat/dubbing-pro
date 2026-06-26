@@ -649,21 +649,36 @@ def merge_subtitle_items_gemini(items, api_key, proxy=None):
             "https": proxy
         }
         
-    # Try stable v1 first, then fallback to v1beta
-    endpoints = [
-        f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    ]
+    # Try multiple models (newer first) to avoid 404 on deprecated models
+    models_to_try = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-1.5-flash"]
     
     res = None
     last_err = None
-    for endpoint in endpoints:
-        try:
-            res = requests.post(endpoint, headers=headers, json=payload, proxies=proxies, timeout=30)
-            if res.status_code == 200:
-                break
-        except Exception as e:
-            last_err = e
+    model_success = False
+    
+    for model_name in models_to_try:
+        endpoints = [
+            f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={api_key}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        ]
+        
+        for endpoint in endpoints:
+            try:
+                res = requests.post(endpoint, headers=headers, json=payload, proxies=proxies, timeout=30)
+                if res.status_code == 200:
+                    model_success = True
+                    break
+                elif res.status_code in [400, 403, 429]:
+                    # Stop trying other endpoints/models if the key is invalid, forbidden, or rate-limited
+                    model_success = False
+                    break
+            except Exception as e:
+                last_err = e
+                
+        if model_success:
+            break
+        if res is not None and res.status_code in [400, 403, 429]:
+            break
             
     if res is None or res.status_code != 200:
         if res is not None:
