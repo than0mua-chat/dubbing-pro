@@ -5,10 +5,14 @@ import asyncio
 import tempfile
 import subprocess
 import os
+import re
+import requests
 from pathlib import Path
+import imageio_ffmpeg
 
 from utils import DETAILED_ERROR_LOGGING
 from config import DEFAULT_CONFIGS
+from acronym_processor import normalize_acronyms_vi
 
 # Language default (environment variable)
 DEFAULT_LANGUAGE = os.getenv('DEFAULT_LANGUAGE', DEFAULT_CONFIGS["DEFAULT_LANGUAGE"])
@@ -37,13 +41,17 @@ model_data = [
 def is_ffmpeg_installed():
     """Check if FFmpeg is installed and accessible."""
     try:
-        subprocess.run(['ffmpeg', '-version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+        return os.path.exists(ffmpeg_path)
+    except Exception:
         return False
 
-async def _generate_audio_stream(text, voice, speed):
+async def _generate_audio_stream(text, voice, speed, proxy=None):
     """Generate streaming TTS audio using edge-tts."""
+    # Normalize Vietnamese acronyms if voice is Vietnamese
+    if voice.lower().startswith('vi-') or 'vietnam' in voice.lower():
+        text = normalize_acronyms_vi(text)
+
     # Determine if the voice is an OpenAI-compatible voice or a direct edge-tts voice
     edge_tts_voice = voice_mapping.get(voice, voice)  # Use mapping if in OpenAI names, otherwise use as-is
     
@@ -55,19 +63,23 @@ async def _generate_audio_stream(text, voice, speed):
         speed_rate = "+0%"
     
     # Create the communicator for streaming
-    communicator = edge_tts.Communicate(text=text, voice=edge_tts_voice, rate=speed_rate)
+    communicator = edge_tts.Communicate(text=text, voice=edge_tts_voice, rate=speed_rate, proxy=proxy)
     
     # Stream the audio data
     async for chunk in communicator.stream():
         if chunk["type"] == "audio":
             yield chunk["data"]
 
-def generate_speech_stream(text, voice, speed=1.0):
+def generate_speech_stream(text, voice, speed=1.0, proxy=None):
     """Generate streaming speech audio (synchronous wrapper)."""
-    return asyncio.run(_generate_audio_stream(text, voice, speed))
+    return asyncio.run(_generate_audio_stream(text, voice, speed, proxy))
 
-async def _generate_audio(text, voice, response_format, speed):
+async def _generate_audio(text, voice, response_format, speed, proxy=None):
     """Generate TTS audio and optionally convert to a different format."""
+    # Normalize Vietnamese acronyms if voice is Vietnamese
+    if voice.lower().startswith('vi-') or 'vietnam' in voice.lower():
+        text = normalize_acronyms_vi(text)
+
     # Determine if the voice is an OpenAI-compatible voice or a direct edge-tts voice
     edge_tts_voice = voice_mapping.get(voice, voice)  # Use mapping if in OpenAI names, otherwise use as-is
 
@@ -83,8 +95,35 @@ async def _generate_audio(text, voice, response_format, speed):
         speed_rate = "+0%"
 
     # Generate the MP3 file
-    communicator = edge_tts.Communicate(text=text, voice=edge_tts_voice, rate=speed_rate)
-    await communicator.save(temp_mp3_path)
+    connector = None
+    comm_kwargs = {
+        "text": text,
+        "voice": edge_tts_voice,
+        "rate": speed_rate
+    }
+    if proxy:
+        if proxy.startswith("socks"):
+            try:
+                from aiohttp_socks import ProxyConnector
+                connector = ProxyConnector.from_url(proxy)
+                comm_kwargs["connector"] = connector
+            except Exception as e:
+                print(f"Error creating SOCKS ProxyConnector: {e}")
+                comm_kwargs["proxy"] = proxy
+        else:
+            comm_kwargs["proxy"] = proxy
+
+    try:
+        communicator = edge_tts.Communicate(**comm_kwargs)
+        await communicator.save(temp_mp3_path)
+    finally:
+        if connector:
+            try:
+                # Close the connector asynchronously if it has close method
+                # Since we are in an async function, we can await it
+                await connector.close()
+            except Exception:
+                pass
     temp_mp3_file_obj.close() # Explicitly close our file object for the initial mp3
 
     # If the requested format is mp3, return the generated file directly
@@ -102,8 +141,9 @@ async def _generate_audio(text, voice, response_format, speed):
     converted_file_obj.close() # Close file object, ffmpeg will write to the path
 
     # Build the FFmpeg command
+    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
     ffmpeg_command = [
-        "ffmpeg",
+        ffmpeg_path,
         "-i", temp_mp3_path,  # Input file path
         "-c:a", {
             "aac": "aac",
@@ -129,9 +169,11 @@ async def _generate_audio(text, voice, response_format, speed):
         converted_path  # Output file path
     ])
 
+    # Prevent console window from flashing on Windows
+    creation_flags = 0x08000000 if os.name == 'nt' else 0
     try:
         # Run FFmpeg command and ensure no errors occur
-        subprocess.run(ffmpeg_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(ffmpeg_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=creation_flags)
     except subprocess.CalledProcessError as e:
         # Clean up potentially created (but incomplete) converted file
         Path(converted_path).unlink(missing_ok=True)
@@ -151,8 +193,8 @@ async def _generate_audio(text, voice, response_format, speed):
 
     return converted_path
 
-def generate_speech(text, voice, response_format, speed=1.0):
-    return asyncio.run(_generate_audio(text, voice, response_format, speed))
+def generate_speech(text, voice, response_format, speed=1.0, proxy=None):
+    return asyncio.run(_generate_audio(text, voice, response_format, speed, proxy))
 
 def get_models():
     return model_data
@@ -194,3 +236,70 @@ def speed_to_rate(speed: float) -> str:
 
     # Format with a leading "+" or "-" as required
     return f"{percentage_change:+.0f}%"
+
+def generate_speech_elevenlabs(text, voice_id, model_id, api_key, stability=0.5, similarity=0.75, speed=1.0, proxies=None):
+    """
+    Generate speech using ElevenLabs API.
+    Saves to a temporary MP3 file and returns the path.
+    """
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "xi-api-key": api_key
+    }
+    
+    payload = {
+        "text": text,
+        "model_id": model_id or "eleven_multilingual_v2",
+        "voice_settings": {
+            "stability": stability,
+            "similarity_boost": similarity
+        }
+    }
+    
+    response = requests.post(url, json=payload, headers=headers, proxies=proxies, timeout=30)
+    if response.status_code == 200:
+        # Create temp file
+        temp_mp3 = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        temp_mp3_path = temp_mp3.name
+        temp_mp3.write(response.content)
+        temp_mp3.close()
+        
+        # If speed != 1.0, apply time stretching via ffmpeg
+        if speed != 1.0 and is_ffmpeg_installed():
+            converted_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+            converted_path = converted_file.name
+            converted_file.close()
+            
+            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            
+            # Clamp speed and chain filters if necessary
+            # ffmpeg atempo filter works between 0.5 and 2.0
+            if speed < 0.5:
+                atempo_filter = "atempo=0.5,atempo=0.5"
+            elif speed > 2.0:
+                atempo_filter = "atempo=2.0,atempo=2.0"
+            else:
+                atempo_filter = f"atempo={speed}"
+                
+            ffmpeg_command = [
+                ffmpeg_path,
+                "-i", temp_mp3_path,
+                "-filter:a", atempo_filter,
+                "-y",
+                converted_path
+            ]
+            creation_flags = 0x08000000 if os.name == 'nt' else 0
+            try:
+                subprocess.run(ffmpeg_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=creation_flags)
+                os.unlink(temp_mp3_path)
+                return converted_path
+            except Exception as e:
+                print(f"ElevenLabs speed adjustment failed: {e}")
+                os.unlink(converted_path)
+                return temp_mp3_path
+                
+        return temp_mp3_path
+    else:
+        raise RuntimeError(f"ElevenLabs API error: {response.status_code} - {response.text}")

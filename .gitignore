@@ -162,3 +162,9 @@ cython_debug/
 #.idea/
 
 .DS_Store
+
+# Custom ignores for Dubbing Pro
+elevenlabs_keys.txt
+output/
+*.mp3
+*.srt

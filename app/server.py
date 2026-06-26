@@ -29,11 +29,11 @@ EXPAND_API = getenv_bool('EXPAND_API', DEFAULT_CONFIGS["EXPAND_API"])
 # DEFAULT_MODEL = os.getenv('DEFAULT_MODEL', 'tts-1')
 
 # Currently in "beta" — needs more extensive testing where drop-in replacement warranted
-def generate_sse_audio_stream(text, voice, speed):
+def generate_sse_audio_stream(text, voice, speed, proxy=None):
     """Generator function for SSE streaming with JSON events."""
     try:
         # Generate streaming audio chunks and convert to SSE format
-        for chunk in generate_speech_stream(text, voice, speed):
+        for chunk in generate_speech_stream(text, voice, speed, proxy):
             # Base64 encode the audio chunk
             encoded_audio = base64.b64encode(chunk).decode('utf-8')
             
@@ -85,6 +85,7 @@ def text_to_speech():
         voice = data.get('voice', DEFAULT_VOICE)
         response_format = data.get('response_format', DEFAULT_RESPONSE_FORMAT)
         speed = float(data.get('speed', DEFAULT_SPEED))
+        proxy = data.get('proxy')  # Get proxy from payload
         
         # Check stream format - only "sse" triggers streaming
         stream_format = data.get('stream_format', 'audio')  # 'audio' (default) or 'sse'
@@ -94,7 +95,7 @@ def text_to_speech():
         if stream_format == 'sse':
             # Return SSE streaming response with JSON events
             def generate_sse():
-                for event in generate_sse_audio_stream(text, voice, speed):
+                for event in generate_sse_audio_stream(text, voice, speed, proxy):
                     yield event
             
             return Response(
@@ -109,7 +110,7 @@ def text_to_speech():
             )
         else:
             # Return raw audio data (like OpenAI) - can be piped to ffplay
-            output_file_path = generate_speech(text, voice, response_format, speed)
+            output_file_path = generate_speech(text, voice, response_format, speed, proxy)
             
             # Read the file and return raw audio data
             with open(output_file_path, 'rb') as audio_file:
