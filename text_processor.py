@@ -571,9 +571,10 @@ def split_long_clause(clause_chars, max_len=80):
     return [p for p in parts if p]
 
 
-def merge_subtitle_items_gemini(items, api_key, proxy=None):
+def merge_subtitle_items_gemini(items, api_key, proxy=None, logger_func=None):
     """
-    Restores punctuation and merges subtitle items using Google Gemini 1.5 Flash API.
+    Restores punctuation and merges subtitle items using Google Gemini API.
+    Uses chunking and model-rotation pool (prioritizing gemini-2.5-flash-lite) to respect rate limits.
     Realigns timestamps using SequenceMatcher based character interpolation.
     """
     if not items:
@@ -609,6 +610,7 @@ def merge_subtitle_items_gemini(items, api_key, proxy=None):
     import requests
     import json
     import re
+    import time
     
     # 2.1: Strip HTML tags and sound annotations from raw texts
     raw_texts = []
@@ -620,28 +622,23 @@ def merge_subtitle_items_gemini(items, api_key, proxy=None):
         txt = re.sub(r'\([^)]*\)|\[[^\]]*\]', '', txt)
         raw_texts.append(txt.strip())
         
-    raw_text = "\n".join(raw_texts)
+    # 2.2: Split raw_texts into chunks of 100 lines to handle rate limit & context windows gracefully
+    chunk_size = 100
+    chunks = [raw_texts[i:i + chunk_size] for i in range(0, len(raw_texts), chunk_size)]
+    num_chunks = len(chunks)
     
-    prompt = (
-        "You are an expert subtitle restorer. Your task is to process the following raw, unpunctuated subtitle transcript.\n"
-        "Please:\n"
-        "1. Restore correct capitalization and punctuation (periods, commas, question marks, exclamation marks).\n"
-        "2. Clean any formatting tags (like <i>, <b>) and non-speech sounds (like [Music], [Laughter], (applause)) - remove them completely.\n"
-        "3. Standardize and expand acronyms based on context (e.g. capitalize CISSP, CEO, AWS, IT, AI).\n"
-        "4. Maintain the exact flow and meaning of the original sentences. Do not summarize or omit speech.\n"
-        "5. Return ONLY the final restored plain text. Do not include any notes, explanations, markdown formatting, or HTML.\n\n"
-        f"Here is the raw subtitle text:\n---\n{raw_text}\n---\nRestored text:"
-    )
+    restored_chunks = []
+    
+    # Preferred models pool, starting with gemini-2.5-flash-lite as requested
+    models_pool = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-flash-latest"
+    ]
     
     headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{
-            "parts": [{
-                "text": prompt
-            }]
-        }]
-    }
-    
     proxies = None
     if proxy:
         proxies = {
@@ -649,68 +646,114 @@ def merge_subtitle_items_gemini(items, api_key, proxy=None):
             "https": proxy
         }
         
-    # Try multiple models (newer first) to avoid 404 on deprecated models
-    models_to_try = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-1.5-flash"]
+    model_idx = 0  # We will rotate across models when hitting 429 or other errors
     
-    res = None
-    last_err = None
-    model_success = False
-    
-    for model_name in models_to_try:
-        endpoints = [
-            f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={api_key}",
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        ]
+    for c_idx, chunk in enumerate(chunks):
+        chunk_num = c_idx + 1
+        if logger_func:
+            logger_func(f"Đang xử lý phân đoạn {chunk_num}/{num_chunks}...")
+            
+        chunk_text = "\n".join(chunk)
+        prompt = (
+            "You are an expert subtitle restorer. Your task is to process the following raw, unpunctuated subtitle transcript.\n"
+            "Please:\n"
+            "1. Restore correct capitalization and punctuation (periods, commas, question marks, exclamation marks).\n"
+            "2. Clean any formatting tags (like <i>, <b>) and non-speech sounds (like [Music], [Laughter], (applause)) - remove them completely.\n"
+            "3. Standardize and expand acronyms based on context (e.g. capitalize CISSP, CEO, AWS, IT, AI).\n"
+            "4. Maintain the exact flow and meaning of the original sentences. Do not summarize or omit speech.\n"
+            "5. Return ONLY the final restored plain text. Do not include any notes, explanations, markdown formatting, or HTML.\n\n"
+            f"Here is the raw subtitle text:\n---\n{chunk_text}\n---\nRestored text:"
+        )
         
-        for endpoint in endpoints:
-            try:
-                res = requests.post(endpoint, headers=headers, json=payload, proxies=proxies, timeout=30)
-                if res.status_code == 200:
-                    model_success = True
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }]
+        }
+        
+        chunk_success = False
+        max_attempts = 10
+        attempt = 0
+        
+        while attempt < max_attempts:
+            model_name = models_pool[model_idx % len(models_pool)]
+            endpoints = [
+                f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={api_key}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            ]
+            
+            res = None
+            last_err = None
+            status_code = None
+            
+            for endpoint in endpoints:
+                try:
+                    res = requests.post(endpoint, headers=headers, json=payload, proxies=proxies, timeout=30)
+                    status_code = res.status_code
+                    if status_code == 200:
+                        break
+                    elif status_code in [400, 403]:
+                        # Stop checking other endpoints for this model if it's an Auth/Key error
+                        break
+                except Exception as e:
+                    last_err = e
+            
+            if status_code == 200:
+                res_data = res.json()
+                try:
+                    restored_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    restored_chunks.append(restored_text)
+                    chunk_success = True
                     break
-                elif res.status_code in [400, 403, 429]:
-                    # Stop trying other endpoints/models if the key is invalid, forbidden, or rate-limited
-                    model_success = False
-                    break
-            except Exception as e:
-                last_err = e
+                except Exception as e:
+                    raise RuntimeError(f"Error parsing Gemini response: {e}. Full response: {res_data}")
+                    
+            # Handle key authorization/bad request errors immediately
+            if status_code in [400, 403]:
+                if res is not None:
+                    try:
+                        err_json = res.json()
+                        if "error" in err_json:
+                            err_msg = err_json["error"].get("message", "")
+                            err_status = err_json["error"].get("status", "")
+                            raise RuntimeError(f"Gemini API Error {status_code} ({err_status}): {err_msg}")
+                    except Exception as json_err:
+                        if isinstance(json_err, RuntimeError):
+                            raise json_err
+                    raise RuntimeError(f"HTTP {status_code}: {res.text[:300]}")
+            
+            # If rate limited (429) or connection error, log it and rotate model
+            attempt += 1
+            err_reason = f"HTTP {status_code}" if status_code else "Connection Error"
+            if logger_func:
+                logger_func(f"Model {model_name} bận ({err_reason}). Đang luân chuyển model...")
                 
-        if model_success:
-            break
-        if res is not None and res.status_code in [400, 403, 429]:
-            break
+            model_idx += 1  # Rotate to next model in pool
             
-    if res is None or res.status_code != 200:
-        if res is not None:
-            # Try to parse Google's JSON error response
-            try:
-                err_json = res.json()
-                if "error" in err_json:
-                    err_msg = err_json["error"].get("message", "")
-                    err_status = err_json["error"].get("status", "")
-                    raise RuntimeError(f"Gemini API Error {res.status_code} ({err_status}): {err_msg}")
-            except Exception as json_err:
-                if isinstance(json_err, RuntimeError):
-                    raise json_err
-            # If not JSON, show the first 300 chars of the text (helps identify proxy blocks/HTML)
-            err_body = res.text.strip() if res.text else ""
-            if not err_body:
-                err_body = "Empty Response"
+            # If we completed a full rotation cycle, wait before retrying
+            if attempt % len(models_pool) == 0:
+                wait_time = 12
+                if logger_func:
+                    logger_func(f"Đã luân chuyển hết pool model. Chờ {wait_time} giây trước khi thử lại...")
+                time.sleep(wait_time)
+                
+        if not chunk_success:
+            if res is not None:
+                raise RuntimeError(f"Exceeded max retry attempts for chunk {chunk_num}. Last status: {res.status_code}")
+            elif last_err:
+                raise last_err
             else:
-                err_body = err_body[:300]
-            raise RuntimeError(f"HTTP {res.status_code} from endpoint: {err_body}")
-        elif last_err:
-            raise last_err
-        else:
-            raise RuntimeError("Failed to connect to Gemini API (Connection Error).")
+                raise RuntimeError(f"Failed to connect to Gemini API for chunk {chunk_num} after multiple model rotations.")
+                
+        # Optional: add a small polite delay between chunks to avoid hitting RPM limits
+        if num_chunks > 1 and chunk_num < num_chunks:
+            time.sleep(2)
             
-    res_data = res.json()
+    # Combine all chunk results
+    new_text = " ".join(restored_chunks)
     
-    try:
-        new_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception as e:
-        raise RuntimeError(f"Error parsing Gemini response: {e}. Full response: {res_data}")
-        
     # Clean up multiple newlines or spaces returned by Gemini
     new_text = re.sub(r'\n+', ' ', new_text)
     new_text = re.sub(r'\s+', ' ', new_text).strip()

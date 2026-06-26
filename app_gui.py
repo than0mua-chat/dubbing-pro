@@ -2029,8 +2029,11 @@ class TTSApp:
                 else:
                     self.update_queue.put(("log", "Không có proxy, kết nối trực tiếp đến Gemini AI..."))
                 
+                def log_cb(msg):
+                    self.update_queue.put(("log", msg))
+                
                 start_t = time.time()
-                merged = merge_subtitle_items_gemini(self.import_items, api_key, proxy=proxy_str)
+                merged = merge_subtitle_items_gemini(self.import_items, api_key, proxy=proxy_str, logger_func=log_cb)
                 latency = time.time() - start_t
                 
                 if proxy_str:
