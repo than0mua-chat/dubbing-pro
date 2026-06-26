@@ -1,6 +1,3 @@
-flask
-gevent
-python-dotenv
 edge-tts
 emoji
 imageio-ffmpeg
@@ -8,4 +5,4 @@ mutagen
 pysocks
 aiohttp-socks
 youtube-transcript-api
-python-docx
+python-docx

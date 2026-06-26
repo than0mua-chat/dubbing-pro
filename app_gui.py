@@ -8,9 +8,25 @@ import requests
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dotenv import load_dotenv
 import subprocess
 import edge_tts
+
+def load_dotenv(dotenv_path=".env"):
+    if os.path.exists(dotenv_path):
+        try:
+            with open(dotenv_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        v_val = v.strip()
+                        if len(v_val) >= 2 and ((v_val[0] == '"' and v_val[-1] == '"') or (v_val[0] == "'" and v_val[-1] == "'")):
+                            v_val = v_val[1:-1]
+                        os.environ[k.strip()] = v_val
+        except Exception as e:
+            print(f"Error loading .env file: {e}")
 
 # Load environment variables
 load_dotenv()
@@ -18,31 +34,11 @@ load_dotenv()
 from text_processor import parse_srt, parse_txt, parse_dgt, format_srt_time, write_srt_file
 from audio_processor import get_audio_duration, join_mp3_files
 
-API_KEY = os.getenv('API_KEY', 'your_api_key_here')
-PORT = int(os.getenv('PORT', '5050'))
-
 # Ensure app directory is in sys.path for imports
 _app_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app")
 if _app_dir not in sys.path:
     sys.path.insert(0, _app_dir)
 
-# Start backend server in a background thread
-def run_backend_server():
-    app_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app")
-    if app_dir not in sys.path:
-        sys.path.insert(0, app_dir)
-        
-    try:
-        from server import app as server_app
-        from gevent.pywsgi import WSGIServer
-        print(f"Starting backend server on port {PORT} in background thread...")
-        http_server = WSGIServer(('127.0.0.1', PORT), server_app)
-        http_server.serve_forever()
-    except Exception as e:
-        print(f"Backend server thread status/error: {e}")
-
-server_thread = threading.Thread(target=run_backend_server, daemon=True)
-server_thread.start()
 
 class TTSApp:
     def __init__(self, root):
@@ -816,26 +812,20 @@ class TTSApp:
             messagebox.showinfo("Xử lý viết tắt", "Không tìm thấy cụm từ viết tắt nào mới cần xử lý.")
 
     def load_server_data(self):
-        """Query local edge-tts server to load available models and voices."""
+        """Load available models and voices directly from Python module."""
         try:
-            self.lbl_status_log.configure(text="Đang kết nối tới server cục bộ để lấy dữ liệu giọng đọc...")
+            self.lbl_status_log.configure(text="Đang nạp cấu hình giọng đọc...")
             
-            headers = {"Authorization": f"Bearer {API_KEY}"}
+            from tts_handler import get_models_formatted, get_voices_formatted, get_voices
             
-            # Fetch models
-            response_models = requests.get(f"http://localhost:{PORT}/v1/models", headers=headers, timeout=5)
-            if response_models.status_code == 200:
-                models = [m["id"] for m in response_models.json().get("models", [])]
-            else:
-                models = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
-                
-            # Fetch voices (OpenAI formatted)
-            response_voices = requests.get(f"http://localhost:{PORT}/v1/audio/voices", headers=headers, timeout=5)
-            if response_voices.status_code == 200:
-                voices = [v["id"] for v in response_voices.json().get("voices", [])]
-            else:
-                voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-                
+            # Load models
+            models_data = get_models_formatted()
+            models = [m["id"] for m in models_data]
+            
+            # Load OpenAI voices
+            voices_data = get_voices_formatted()
+            voices = [v["id"] for v in voices_data]
+            
             # Set values
             self.cb_model.configure(values=models)
             if models:
@@ -845,30 +835,28 @@ class TTSApp:
             if voices:
                 self.cb_voice.set(voices[0])
                 
-            # If default Vietnamese voice vi-VN-HoaiMyNeural is available, we can add all voices
-            response_all_voices = requests.get(f"http://localhost:{PORT}/v1/voices/all", headers=headers, timeout=5)
-            if response_all_voices.status_code == 200:
-                all_v_names = sorted([v["name"] for v in response_all_voices.json().get("voices", [])])
-                self.all_voices_list = all_v_names
-                # Merge lists
-                combined_voices = voices + [v for v in all_v_names if v not in voices]
-                self.cb_voice.configure(values=combined_voices)
-                # Set default to vi-VN-HoaiMyNeural if exists
-                if "vi-VN-HoaiMyNeural" in combined_voices:
-                    self.cb_voice.set("vi-VN-HoaiMyNeural")
-            else:
-                self.all_voices_list = []
+            # Load all Edge-TTS voices
+            all_voices = get_voices(language='all')
+            all_v_names = sorted([v["name"] for v in all_voices])
+            self.all_voices_list = all_v_names
+            
+            # Merge lists
+            combined_voices = voices + [v for v in all_v_names if v not in voices]
+            self.cb_voice.configure(values=combined_voices)
+            
+            # Set default Vietnamese voice if available
+            if "vi-VN-HoaiMyNeural" in combined_voices:
+                self.cb_voice.set("vi-VN-HoaiMyNeural")
                 
-            self.lbl_status_log.configure(text="Đã tải dữ liệu cấu hình giọng đọc thành công!")
+            self.lbl_status_log.configure(text="Đã nạp dữ liệu giọng đọc thành công!")
         except Exception as e:
-            # Server not running or error
-            print(f"Error loading data from server: {e}")
+            print(f"Error loading local TTS data: {e}")
             self.cb_model.configure(values=["tts-1", "tts-1-hd"])
             self.cb_model.set("tts-1")
             self.cb_voice.configure(values=["alloy", "echo", "fable", "onyx", "nova", "shimmer", "vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"])
             self.cb_voice.set("vi-VN-HoaiMyNeural")
             self.all_voices_list = ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"]
-            self.lbl_status_log.configure(text="Không kết nối được server cục bộ. Đã dùng dữ liệu mặc định.")
+            self.lbl_status_log.configure(text="Lỗi nạp giọng đọc. Đã dùng dữ liệu mặc định.")
 
     def search_voices(self):
         query = self.ent_search_name.get().strip().lower()
@@ -1073,27 +1061,37 @@ class TTSApp:
                 lbl_info.configure(text="Đang sinh giọng nghe thử Edge-TTS...", foreground="#fbbf24")
                 def edge_preview_thread():
                     try:
-                        url = f"http://localhost:{PORT}/v1/audio/speech"
-                        headers = {
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {API_KEY}"
+                        temp_path = os.path.join(tempfile.gettempdir(), f"preview_edge_{v_id}.mp3")
+                        # Check proxy settings
+                        proxy_str = None
+                        if self.var_proxy_enabled.get():
+                            proxy_str = self.proxy_manager.get_proxy(service_type="Edge-TTS")
+                        
+                        comm_kwargs = {
+                            "text": f"Xin chào, đây là bản nghe thử giọng đọc {v_name} từ dịch vụ Edge TTS.",
+                            "voice": v_id
                         }
-                        payload = {
-                            "input": f"Xin chào, đây là bản nghe thử giọng đọc {v_name} từ dịch vụ Edge TTS.",
-                            "voice": v_id,
-                            "response_format": "mp3",
-                            "speed": 1.0
-                        }
-                        res = requests.post(url, headers=headers, json=payload, timeout=10)
-                        if res.status_code == 200:
-                            temp_path = os.path.join(tempfile.gettempdir(), f"preview_edge_{v_id}.mp3")
-                            with open(temp_path, "wb") as f:
-                                f.write(res.content)
-                            play_mci_sound(temp_path)
-                        else:
-                            self.update_queue.put(("log", f"Lỗi sinh audio preview: {res.text}"))
+                        connector = None
+                        if proxy_str:
+                            if proxy_str.startswith("socks"):
+                                from aiohttp_socks import ProxyConnector
+                                connector = ProxyConnector.from_url(proxy_str)
+                                comm_kwargs["connector"] = connector
+                            else:
+                                comm_kwargs["proxy"] = proxy_str
+                        
+                        async def save_preview():
+                            communicator = edge_tts.Communicate(**comm_kwargs)
+                            await communicator.save(temp_path)
+                            if connector:
+                                await connector.close()
+                                
+                        asyncio.run(save_preview())
+                        play_mci_sound(temp_path)
+                        lbl_info.configure(text="Phát âm thanh nghe thử thành công.", foreground="#10b981")
                     except Exception as e:
                         print(f"Edge-TTS preview error: {e}")
+                        self.update_queue.put(("log", f"Lỗi sinh audio preview: {e}"))
                         
                 threading.Thread(target=edge_preview_thread, daemon=True).start()
             else:
