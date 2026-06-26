@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dubbing Pro - AI Subtitles & Voice Synthesis Studio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        darkBg: '#09090b',
+                        panelBg: '#121216',
+                        accentIndigo: '#6366f1',
+                        accentEmerald: '#10b981',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #09090b;
+            color: #f4f4f5;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Custom Gradient Backgrounds */
+        .hero-glow {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(16, 185, 129, 0.05) 50%, rgba(9, 9, 11, 0) 100%);
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: 0;
+        }
+
+        .gradient-text-indigo {
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .gradient-text-emerald {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .gradient-text-mixed {
+            background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 35%, #10b981 70%, #6ee7b7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-nav {
+            background: rgba(9, 9, 11, 0.75);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+        }
+
+        .glass-card {
+            background: rgba(18, 18, 22, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(63, 63, 70, 0.4);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(99, 102, 241, 0.7);
+            box-shadow: 0 12px 30px -10px rgba(99, 102, 241, 0.25);
+        }
+
+        /* Premium Buttons */
+        .btn-glow-indigo {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-glow-indigo:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+        }
+
+        .btn-glow-emerald {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-glow-emerald:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+        }
+
+        .btn-secondary {
+            background: rgba(39, 39, 42, 0.6);
+            border: 1px solid rgba(63, 63, 70, 0.8);
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(63, 63, 70, 0.8);
+            color: #f4f4f5;
+            border-color: rgba(161, 161, 170, 0.8);
+        }
+
+        /* Interactive table */
+        .table-row-hover {
+            transition: background-color 0.2s ease;
+        }
+        .table-row-hover:hover {
+            background-color: rgba(24, 24, 27, 0.8);
+        }
+
+        /* Animated Mockup Browser */
+        .mockup-frame {
+            border: 1px solid rgba(63, 63, 70, 0.6);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+        
+        /* Smooth Scroll */
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body class="antialiased font-sans">
+
+    <!-- Top Glowing Orbs -->
+    <div class="hero-glow top-[-100px] left-[5%]"></div>
+    <div class="hero-glow top-[300px] right-[5%]"></div>
+
+    <!-- Header Navigation -->
+    <nav class="sticky top-0 z-50 glass-nav py-4 px-6">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-emerald-400 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fas fa-headset text-black text-lg"></i>
+                </div>
+                <span class="text-xl font-outfit font-black tracking-tight">DUBBING <span class="gradient-text-emerald">PRO</span></span>
+            </div>
+            
+            <!-- Navigation Links -->
+            <div class="hidden md:flex items-center space-x-8 text-sm font-medium text-zinc-400">
+                <a href="#features" class="hover:text-indigo-400 transition-colors">Tính năng</a>
+                <a href="#comparison" class="hover:text-indigo-400 transition-colors">So sánh</a>
+                <a href="#guide" class="hover:text-indigo-400 transition-colors">Hướng dẫn</a>
+            </div>
+
+            <!-- Social/Download buttons -->
+            <div class="flex items-center space-x-3">
+                <a href="https://github.com/than0mua-chat/dubbing-pro" target="_blank" class="btn-secondary px-4 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2">
+                    <i class="fab fa-github text-lg"></i>
+                    <span class="hidden sm:inline">GitHub</span>
+                </a>
+                <a href="https://t.me/+K4vGCqMHBfo4OTZl" target="_blank" class="btn-secondary px-4 py-2 rounded-lg text-sm font-semibold text-zinc-300 hover:text-white flex items-center space-x-2">
+                    <i class="fab fa-telegram text-sky-400 text-lg"></i>
+                    <span class="hidden sm:inline">Cộng đồng</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="relative z-10 max-w-5xl mx-auto px-6 pt-20 pb-16 text-center">
+        <!-- Badge -->
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 mb-6">
+            <span class="flex h-2 w-2 relative mr-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            Standalone Desktop Studio v1.0
+        </span>
+        
+        <!-- Main Heading -->
+        <h1 class="text-4xl sm:text-6xl font-outfit font-black tracking-tight leading-tight mb-8">
+            Thuyết Minh & Lồng Tiếng AI <br>
+            <span class="gradient-text-mixed">Chuyên Nghiệp • Không Giới Hạn</span>
+        </h1>
+        
+        <!-- Subtitle -->
+        <p class="text-zinc-400 text-lg sm:text-xl max-w-3xl mx-auto mb-10 leading-relaxed">
+            Bộ công cụ độc lập chạy trực tiếp trên máy tính Windows. Trích xuất phụ đề YouTube, định dạng câu AI, tổng hợp giọng nói tự nhiên và ghép vào video hoàn hảo chỉ với 1 cú click.
+        </p>
+        
+        <!-- CTA Buttons -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            <a href="https://github.com/than0mua-chat/dubbing-pro/releases" 
+               class="btn-glow-indigo text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center space-x-3 w-full sm:w-auto justify-center">
+                <i class="fas fa-download"></i>
+                <span>TẢI BẢN STALONE (.EXE)</span>
+            </a>
+            <a href="#features" class="btn-secondary text-zinc-300 px-8 py-4 rounded-xl font-bold text-lg hover:text-white w-full sm:w-auto justify-center">
+                Xem tính năng
+            </a>
+        </div>
+
+        <!-- Desktop Mockup Screenshot -->
+        <div class="mockup-frame rounded-2xl bg-zinc-950 overflow-hidden relative group">
+            <div class="bg-zinc-900 px-4 py-3 flex items-center space-x-2 border-b border-zinc-800">
+                <div class="flex space-x-1.5">
+                    <span class="w-3.5 h-3.5 rounded-full bg-rose-500 inline-block"></span>
+                    <span class="w-3.5 h-3.5 rounded-full bg-amber-500 inline-block"></span>
+                    <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block"></span>
+                </div>
+                <div class="bg-zinc-950/70 border border-zinc-800/80 rounded-md text-xs text-zinc-500 px-10 py-1 mx-auto max-w-sm truncate select-none">
+                    DubbingPro.exe - AI Subtitles & Voice Synthesis Studio
+                </div>
+            </div>
+            <img src="assets/app_screenshot.png" alt="Dubbing Pro GUI Mockup" class="w-full object-cover transition-transform duration-700 group-hover:scale-[1.01]">
+            <!-- Border overlay highlight -->
+            <div class="absolute inset-0 border border-indigo-500/10 pointer-events-none rounded-2xl"></div>
+        </div>
+    </header>
+
+    <!-- Key Features Section -->
+    <section id="features" class="max-w-6xl mx-auto px-6 py-16 relative z-10">
+        <div class="text-center mb-16">
+            <h2 class="text-3xl font-outfit font-bold tracking-tight mb-4">Các tính năng đột phá</h2>
+            <p class="text-zinc-400 max-w-2xl mx-auto">Sự kết hợp hoàn hảo giữa xử lý AI đám mây và xử lý âm thanh kỹ thuật số trực tiếp trên máy của bạn.</p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8">
+            <!-- Feature Card 1 -->
+            <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-6 border border-indigo-500/20 text-indigo-400">
+                        <i class="fas fa-cloud-arrow-down text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 font-outfit">Tải Phụ Đề YouTube</h3>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Tự động trích xuất phụ đề qua cơ chế Proxy Pool thông minh tránh bị chặn IP. Hỗ trợ <strong>Google Translate theo lô (Batch)</strong> loại bỏ hoàn toàn lỗi dịch thiếu hoặc lỗi trộn tiếng của YouTube.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature Card 2 -->
+            <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-6 border border-emerald-500/20 text-emerald-400">
+                        <i class="fas fa-wand-magic-sparkles text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 font-outfit">Tái Cấu Trúc Câu AI</h3>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Chế độ lai: <strong>Heuristic Offline</strong> ngăn ngắt câu sai ở các liên từ, và <strong>Gemini AI (Gemini 2.5 Flash Lite)</strong> khôi phục dấu câu, viết hoa, sửa từ viết tắt ngữ cảnh với thuật toán <strong>luân chuyển model chống lỗi 429</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature Card 3 -->
+            <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center mb-6 border border-pink-500/20 text-pink-400">
+                        <i class="fas fa-timeline text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 font-outfit">Nội Suy Thời Gian</h3>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Thuật toán nội suy tuyến tính mốc thời gian cấp ký tự (`SequenceMatcher`). Đồng bộ giọng nói nhân vật với phụ đề khớp tuyệt đối 100% thời lượng của video, không bị trôi tiếng (audio drift).
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature Card 4 -->
+            <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center mb-6 border border-amber-500/20 text-amber-400">
+                        <i class="fas fa-volume-high text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 font-outfit">Thuyết Minh TTS Khớp Timeline</h3>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Tích hợp trực tiếp Edge-TTS (nghe thử độc lập) và ElevenLabs API Key Pool. Tự động chèn khoảng nghỉ thở tự nhiên theo dấu câu và bù khoảng lặng âm thanh cuối câu (End-Silence Padding).
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature Card 5 -->
+            <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-sky-500/10 flex items-center justify-center mb-6 border border-sky-500/20 text-sky-400">
+                        <i class="fas fa-film text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 font-outfit">Mux Video & Phụ Đề (FFmpeg)</h3>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Tự động đóng gói trực tiếp tệp âm thanh thuyết minh đã căn chỉnh timeline và file phụ đề `.srt` vào video gốc bằng thư viện FFmpeg chỉ với một cú nhấp chuột trên phần mềm.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature Card 6 -->
+            <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6 border border-purple-500/20 text-purple-400">
+                        <i class="fas fa-shield-halved text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 font-outfit">Hoạt Động 100% Cục Bộ</h3>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Không phụ thuộc vào máy chủ trung gian hay dịch vụ trả phí định kỳ. Dữ liệu xử lý của bạn được bảo mật tuyệt đối, nằm hoàn toàn trên thiết bị cá nhân của bạn.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison Section -->
+    <section id="comparison" class="max-w-4xl mx-auto px-6 py-16 relative z-10">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-outfit font-bold tracking-tight mb-4">So sánh giải pháp</h2>
+            <p class="text-zinc-400">Dubbing Pro Studio mang lại lợi ích to lớn so với các công cụ web dịch vụ khác</p>
+        </div>
+
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950/80 p-6 text-center border-b border-zinc-800">
+                <h3 class="text-xl font-bold font-outfit">Tại sao chọn Dubbing Pro Studio?</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-zinc-950/30">
+                            <th class="p-5 font-semibold text-zinc-400 text-sm w-1/3 border-r border-zinc-800">Tiêu chí đánh giá</th>
+                            <th class="p-5 font-black text-emerald-400 text-base w-1/3 border-r border-emerald-950/40 bg-emerald-950/10">Dubbing Pro Studio</th>
+                            <th class="p-5 font-semibold text-zinc-500 text-sm w-1/3">Công cụ Lồng tiếng Web khác</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-800/60">
+                        <tr class="table-row-hover">
+                            <td class="p-5 text-zinc-300 text-sm">Chi phí sử dụng</td>
+                            <td class="p-5 font-semibold text-white bg-emerald-950/10 border-r border-emerald-950/40">
+                                <i class="fas fa-circle-check text-emerald-400 mr-2"></i> Miễn phí 100%
+                            </td>
+                            <td class="p-5 text-zinc-500 text-sm">Trả phí thuê bao tháng đắt đỏ</td>
+                        </tr>
+                        <tr class="table-row-hover">
+                            <td class="p-5 text-zinc-300 text-sm">Hạn mức & Giới hạn thời lượng</td>
+                            <td class="p-5 font-semibold text-white bg-emerald-950/10 border-r border-emerald-950/40">
+                                <i class="fas fa-infinity text-emerald-400 mr-2"></i> Không giới hạn
+                            </td>
+                            <td class="p-5 text-zinc-500 text-sm">Giới hạn số phút thuyết minh/tháng</td>
+                        </tr>
+                        <tr class="table-row-hover">
+                            <td class="p-5 text-zinc-300 text-sm">Cơ chế bảo mật dữ liệu</td>
+                            <td class="p-5 font-semibold text-white bg-emerald-950/10 border-r border-emerald-950/40">
+                                <i class="fas fa-lock text-emerald-400 mr-2"></i> Cục bộ (Local) 100%
+                            </td>
+                            <td class="p-5 text-zinc-500 text-sm">Tải video/sub của bạn lên máy chủ đám mây</td>
+                        </tr>
+                        <tr class="table-row-hover">
+                            <td class="p-5 text-zinc-300 text-sm">Tái định dạng câu thông minh</td>
+                            <td class="p-5 font-semibold text-white bg-emerald-950/10 border-r border-emerald-950/40">
+                                <i class="fas fa-circle-check text-emerald-400 mr-2"></i> Heuristic + Gemini AI Pool
+                            </td>
+                            <td class="p-5 text-zinc-500 text-sm">Không có hoặc chỉ sửa dấu thô</td>
+                        </tr>
+                        <tr class="table-row-hover">
+                            <td class="p-5 text-zinc-300 text-sm">Nội suy Character-level Timeline</td>
+                            <td class="p-5 font-semibold text-white bg-emerald-950/10 border-r border-emerald-950/40">
+                                <i class="fas fa-circle-check text-emerald-400 mr-2"></i> Có (Chống trôi giọng)
+                            </td>
+                            <td class="p-5 text-zinc-500 text-sm">Không có (Dễ bị lệch hình khớp tiếng)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Setup Guide Section -->
+    <section id="guide" class="max-w-3xl mx-auto px-6 py-16 relative z-10">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-outfit font-bold tracking-tight mb-4">Các bước bắt đầu dễ dàng</h2>
+            <p class="text-zinc-400">Bạn chỉ cần thực hiện 3 bước đơn giản dưới đây để thiết lập ứng dụng</p>
+        </div>
+
+        <div class="space-y-6">
+            <!-- Step 1 -->
+            <div class="flex items-start space-x-5 p-6 border border-zinc-800 rounded-2xl bg-zinc-900/40 glass-card">
+                <span class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex justify-center items-center font-bold text-lg flex-shrink-0 font-outfit">1</span>
+                <div>
+                    <h4 class="font-bold text-zinc-100 mb-1">Tải tệp cài đặt độc lập</h4>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Tải tệp cài đặt đóng gói `.exe` trực tiếp từ mục Releases trên GitHub của chúng tôi. Chương trình đã đóng gói sẵn môi trường xử lý, dung lượng khoảng 42 MB.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="flex items-start space-x-5 p-6 border border-zinc-800 rounded-2xl bg-zinc-900/40 glass-card">
+                <span class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex justify-center items-center font-bold text-lg flex-shrink-0 font-outfit">2</span>
+                <div>
+                    <h4 class="font-bold text-zinc-100 mb-1">Khởi chạy và Cấu hình</h4>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Chạy file và mở giao diện. Nhập khóa API của **Google Gemini** (hoặc dùng Offline Heuristics) và **ElevenLabs** (nếu dùng pool) trực tiếp trên bảng cấu hình hoặc lưu vào file `.env`.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="flex items-start space-x-5 p-6 border border-zinc-800 rounded-2xl bg-zinc-900/40 glass-card">
+                <span class="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20 flex justify-center items-center font-bold text-lg flex-shrink-0 font-outfit">3</span>
+                <div>
+                    <h4 class="font-bold text-zinc-100 mb-1">Xử lý thuyết minh chỉ với 1 cú click</h4>
+                    <p class="text-zinc-400 text-sm leading-relaxed">
+                        Nhập video/phụ đề gốc, chọn giọng đọc Edge-TTS hoặc ElevenLabs, cấu hình timeline và nhấn **Bắt đầu**. File video mux hoàn chỉnh kèm phụ đề và giọng đọc khớp âm thanh sẽ xuất hiện trong thư mục `output`.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Call to Action Banner -->
+    <section class="max-w-5xl mx-auto px-6 py-12 relative z-10 text-center">
+        <div class="p-12 rounded-3xl bg-gradient-to-tr from-indigo-950/40 to-emerald-950/20 border border-indigo-950/80 shadow-2xl relative overflow-hidden">
+            <!-- Glow background overlay -->
+            <div class="absolute inset-0 bg-indigo-500/[0.02] mix-blend-overlay pointer-events-none"></div>
+            
+            <h2 class="text-3xl sm:text-4xl font-outfit font-black tracking-tight mb-6">Trải nghiệm Thuyết Minh AI Thế Hệ Mới Ngay Hôm Nay</h2>
+            <p class="text-zinc-400 text-base max-w-2xl mx-auto mb-8">
+                Tải xuống bản dựng hoàn toàn miễn phí và bắt đầu tối ưu hóa kênh nội dung của bạn. 100% mã nguồn mở và an toàn dữ liệu.
+            </p>
+            <div class="flex justify-center">
+                <a href="https://github.com/than0mua-chat/dubbing-pro/releases" 
+                   class="btn-glow-emerald text-black font-bold px-8 py-4 rounded-xl text-lg flex items-center space-x-3">
+                    <i class="fas fa-cloud-arrow-down"></i>
+                    <span>TẢI VỀ CHO WINDOWS</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-zinc-900 py-12 text-center relative z-10 bg-zinc-950/30">
+        <div class="flex justify-center space-x-6 mb-6">
+            <a href="https://github.com/than0mua-chat/dubbing-pro" target="_blank" class="text-zinc-500 hover:text-white text-2xl transition-colors"><i class="fab fa-github"></i></a>
+            <a href="https://t.me/+K4vGCqMHBfo4OTZl" target="_blank" class="text-zinc-500 hover:text-sky-400 text-2xl transition-colors"><i class="fab fa-telegram"></i></a>
+            <a href="https://www.facebook.com/phuong.viet.hoang.Nghe/" target="_blank" class="text-zinc-500 hover:text-blue-600 text-2xl transition-colors"><i class="fab fa-facebook"></i></a>
+        </div>
+        <p class="text-zinc-500 text-sm mb-2">&copy; 2026 Dubbing Pro Studio. Phát triển bởi Hoàng và cộng sự.</p>
+        <p class="text-zinc-600 text-xs font-semibold tracking-wider uppercase">GNU GPL v3.0 Open Source Project</p>
+    </footer>
+
+</body>
+</html>
