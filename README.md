@@ -45,6 +45,12 @@ Make sure you have Python 3.9+ and FFmpeg installed on your system.
    ```
    *(Or run `run_app.bat` on Windows)*
 
+#### 📦 Standalone Build (Packaging for Deployment)
+To compile and distribute the GUI application as a standalone Windows executable (`.exe`), you can use the automated build script. This bundles Python, the Tkinter framework, and all dependencies into a single package:
+*   Double-click and run **`build_exe.bat`** on Windows.
+*   Once completed, the standalone folder will be generated in **`dist\DubbingPro`**.
+*   Users can launch the studio directly via **`dist\DubbingPro\DubbingPro.exe`** without needing Python or `pip` installations.
+
 ---
 
 ## 🗣️ Component 2: OpenAI-Compatible Edge-TTS API Server
